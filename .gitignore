@@ -1,2 +1,4 @@
 .stack-work/
-plot-series.svg
+.vscode/
+plot-series.*
+testFile*

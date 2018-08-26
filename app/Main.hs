@@ -2,46 +2,42 @@
 
 module Main where
 
-import LibYahoo
-import LibCSV
+import Yadata.LibAPI
 
--- import CSV related functions
-import Text.CSV
-import qualified Data.ByteString.Lazy.UTF8 as DBLU
+import System.Environment
 
--- import other
-import Data.Time
-import Data.Either
-import Control.Arrow (first)
 
--- import graphiccs
-import Graphics.Rendering.Chart.Easy
-import Graphics.Rendering.Chart.Backend.Diagrams
-
--- import system process
-import System.Process
-import qualified Data.ByteString.Lazy.Char8 as C
 -- http://hackage.haskell.org/package/wreq-0.5.1.0/docs/Network-Wreq-Session.html
 -- https://stackoverflow.com/questions/44044263/yahoo-finance-historical-data-downloader-url-is-not-working
 -- https://stackoverflow.com/questions/1317399/getting-the-local-appdata-folder-in-haskell
 
-prices :: Num b => Either String [(UTCTime, b)] -> [(LocalTime, b)]
-prices x = map (first (utcToLocalTime utc)) (concat $ rights [x])
+dispatch :: [(String, [String] -> IO ())]
+dispatch =  [ ("view", viewTL), ("graph", downloadH2Graph), 
+              ("download", downloadH2File),  ("rundownload", runDownloadH2File),
+              ("mva", movAvg), ("maStrat", movAvgStrategy), ("coin", downloadCoin) ]
+
+-- To view ticker file, run:
+--    stack exec yadata-exe view sp500.csv | more
+
+-- To download historical time series and make a graph for the company IBM:
+--    stack exec yadata-exe graph IBM
+
+-- To download historical time series and save them to a file for the companies IBM, MSFT, AAPL and KO:
+--    stack exec yadata-exe download IBM MSFT AAPL KO
+
+-- To download historical time series, calculate their moving averages and
+-- save them to a file for the companies IBM, MSFT, AAPL and KO:
+--    stack exec yadata-exe mva IBM MSFT AAPL KO
+
+-- To download historical time series, and backtest "moving average crossover"
+-- strategy and save results to a file for the companies IBM, MSFT, AAPL and KO:
+--    stack exec yadata-exe maStrat IBM MSFT AAPL KO
 
 
-main :: IO (Either YahooException C.ByteString)
+main :: IO () --(Either YahooException C.ByteString)
 main = do
-   ydata <- getYahooData "IBM" :: IO (Either YahooException C.ByteString)
-   case ydata of
-       Left x -> return $ Left YStatusCodeException
-       Right yd -> do
-         let yd_csv = parseCSV "IBM" (DBLU.toString yd)
-         let dates = getColumnInCSV yd_csv "Date"
-         let closep = getColumnInCSV yd_csv "Adj Close"
-         let ts = zip <$> (map (read2UTCTime "%Y-%m-%d") <$> dates) <*> (map read2Double <$> closep)
-         -- Plot
-         let plotFileName = "plot-series.svg"
-         toFile def plotFileName $ plot (line "" [prices ts])
-         putStrLn $ "Plot saved to: " ++ plotFileName
-         createProcess (shell $ "firefox " ++ plotFileName)
-         return $ Right "__End__"
+    (command:args) <- getArgs
+    let (Just action) = lookup command dispatch
+    action args
+
+
